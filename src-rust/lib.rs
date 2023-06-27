@@ -1,16 +1,22 @@
 #![allow(clippy::missing_safety_doc)]
 
-use arrow_array::RecordBatchReader;
+use arrow_array::{
+    new_empty_array, BooleanArray, Float32Array, Float64Array, Int16Array, Int32Array, Int64Array,
+    Int8Array, RecordBatch, RecordBatchReader,
+};
 use arrow_buffer::ArrowNativeType;
 use arrow_data::Buffers;
-use arrow_schema::DataType;
+use arrow_schema::{DataType, Field, Schema};
 use jni::{
-    objects::{JClass, JObject, JPrimitiveArray, JString, JValue, TypeArray},
+    objects::{JClass, JList, JMap, JObject, JPrimitiveArray, JString, TypeArray},
     sys::{jlong, jobject},
     JNIEnv,
 };
-use parquet::arrow::arrow_reader::{ParquetRecordBatchReader, ParquetRecordBatchReaderBuilder};
-use std::fs::File;
+use parquet::arrow::{
+    arrow_reader::{ParquetRecordBatchReader, ParquetRecordBatchReaderBuilder},
+    ArrowWriter,
+};
+use std::{fs::File, sync::Arc};
 
 struct NativeReader {
     file: File,
@@ -25,7 +31,7 @@ impl Clone for NativeReader {
 }
 
 #[no_mangle]
-pub extern "system" fn Java_data_ParquetNative_open<'local>(
+pub extern "system" fn Java_data_ParquetNative_openReader<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     path: JString<'local>,
@@ -33,12 +39,11 @@ pub extern "system" fn Java_data_ParquetNative_open<'local>(
     let path: String = env.get_string(&path).unwrap().into();
     let file = File::open(path).unwrap();
     let reader = NativeReader { file };
-    let reader = Box::new(reader);
-    Box::leak(reader) as *mut _ as jlong
+    Box::leak(Box::new(reader)) as *mut _ as jlong
 }
 
 #[no_mangle]
-pub unsafe extern "system" fn Java_data_ParquetNative_close<'local>(
+pub unsafe extern "system" fn Java_data_ParquetNative_closeReader<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
     reader: jlong,
@@ -50,11 +55,6 @@ fn new_array_list<'local>(env: &mut JNIEnv<'local>) -> JObject<'local> {
     env.new_object("Ljava/util/ArrayList;", "()V", &[]).unwrap()
 }
 
-fn add_array_list<'local>(env: &mut JNIEnv<'local>, list: &JObject<'local>, obj: &JObject<'local>) {
-    env.call_method(list, "add", "(Ljava/lang/Object;)Z", &[JValue::Object(obj)])
-        .unwrap();
-}
-
 #[no_mangle]
 pub unsafe extern "system" fn Java_data_ParquetNative_getColumns<'local>(
     mut env: JNIEnv<'local>,
@@ -64,7 +64,8 @@ pub unsafe extern "system" fn Java_data_ParquetNative_getColumns<'local>(
     let reader = reader as *mut NativeReader;
     let reader = reader.as_ref().unwrap().clone();
 
-    let list = new_array_list(&mut env);
+    let list_raw = new_array_list(&mut env);
+    let list = JList::from_env(&mut env, &list_raw).unwrap();
 
     let reader = ParquetRecordBatchReaderBuilder::try_new(reader.file)
         .unwrap()
@@ -73,9 +74,9 @@ pub unsafe extern "system" fn Java_data_ParquetNative_getColumns<'local>(
 
     for f in reader.schema().fields() {
         let name = env.new_string(f.name()).unwrap();
-        add_array_list(&mut env, &list, &name);
+        list.add(&mut env, &name).unwrap();
     }
-    list.into_raw()
+    list_raw.into_raw()
 }
 
 fn concat_buffers<'local, T: TypeArray + ArrowNativeType>(
@@ -184,4 +185,156 @@ pub unsafe extern "system" fn Java_data_ParquetNative_columnNext<'local>(
     let col = col as *mut NativeColumn;
     let col = col.as_mut().unwrap();
     col.next(&env).unwrap_or_default().into_raw()
+}
+
+struct NativeWriter {
+    schema: Arc<Schema>,
+    writer: ArrowWriter<File>,
+}
+
+#[no_mangle]
+pub unsafe extern "system" fn Java_data_ParquetNative_openWriter<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    path: JString<'local>,
+    schema: JObject<'local>,
+) -> jlong {
+    let schema = JMap::from_env(&mut env, &schema).unwrap();
+
+    let mut fields: Vec<Field> = vec![];
+
+    let mut schema_iter = schema.iter(&mut env).unwrap();
+    while let Some((key, ty)) = schema_iter.next(&mut env).unwrap() {
+        let key = env.auto_local(JString::from_raw(key.into_raw()));
+        let ty = env.auto_local(JClass::from_raw(ty.into_raw()));
+
+        let key: String = env.get_string(&key).unwrap().into();
+
+        let ty_name = JString::from_raw(
+            env.call_method(&ty, "getTypeName", "()Ljava/lang/String;", &[])
+                .unwrap()
+                .l()
+                .unwrap()
+                .into_raw(),
+        );
+        let ty_name: String = env.get_string(&ty_name).unwrap().into();
+        let ty = match ty_name.as_str() {
+            "Ljava/lang/Boolean" => DataType::Boolean,
+            "Ljava/lang/Byte" => DataType::Int8,
+            "Ljava/lang/Short" => DataType::Int16,
+            "Ljava/lang/Integer" => DataType::Int32,
+            "Ljava/lang/Long" => DataType::Int64,
+            "Ljava/lang/Float" => DataType::Float32,
+            "Ljava/lang/Double" => DataType::Float64,
+            _ => DataType::Null,
+        };
+        fields.push(Field::new(key, ty, false));
+    }
+    let schema = Arc::new(Schema::new(fields));
+
+    let path: String = env.get_string(&path).unwrap().into();
+    let file = File::create(path).unwrap();
+    let writer = ArrowWriter::try_new(file, schema.clone(), None).unwrap();
+    let writer = NativeWriter { schema, writer };
+    Box::leak(Box::new(writer)) as *mut _ as jlong
+}
+
+#[no_mangle]
+pub unsafe extern "system" fn Java_data_ParquetNative_closeWriter<'local>(
+    _env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    writer: jlong,
+) {
+    let writer: Box<NativeWriter> = Box::from_raw(writer as *mut _);
+    writer.writer.close().unwrap();
+}
+
+trait FromJObject {
+    fn from_jobject<'local>(env: &mut JNIEnv<'local>, obj: &JObject<'local>) -> Self;
+}
+
+macro_rules! impl_from_jobject {
+    ($t: ty, $unbox_method: expr, $unbox_sig: expr, $unbox: ident) => {
+        impl FromJObject for $t {
+            fn from_jobject<'local>(env: &mut JNIEnv<'local>, obj: &JObject<'local>) -> Self {
+                env.call_method(obj, $unbox_method, $unbox_sig, &[])
+                    .unwrap()
+                    .$unbox()
+                    .unwrap()
+            }
+        }
+    };
+}
+
+impl_from_jobject!(bool, "booleanValue", "()Z", z);
+impl_from_jobject!(i8, "byteValue", "()B", b);
+impl_from_jobject!(i16, "shortValue", "()S", s);
+impl_from_jobject!(i32, "integerValue", "()I", i);
+impl_from_jobject!(i64, "longValue", "()J", j);
+impl_from_jobject!(f32, "floatValue", "()F", f);
+impl_from_jobject!(f64, "doubleValue", "()D", d);
+
+#[no_mangle]
+pub unsafe extern "system" fn Java_data_ParquetNative_writeRow<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    writer: jlong,
+    values: JObject<'local>,
+) {
+    let writer = writer as *mut NativeWriter;
+    let writer = writer.as_mut().unwrap();
+
+    let schema = writer.schema.clone();
+    let mut columns = schema
+        .fields()
+        .iter()
+        .map(|f| new_empty_array(f.data_type()))
+        .collect::<Vec<_>>();
+
+    let values = JMap::from_env(&mut env, &values).unwrap();
+    let mut values_iter = values.iter(&mut env).unwrap();
+    while let Some((key, value)) = values_iter.next(&mut env).unwrap() {
+        let key = env.auto_local(JString::from_raw(key.into_raw()));
+        let value = env.auto_local(value);
+
+        let key: String = env.get_string(&key).unwrap().into();
+        let (index, field) = schema.fields().find(&key).unwrap();
+
+        match field.data_type() {
+            DataType::Boolean => {
+                columns[index] = Arc::new(BooleanArray::from(vec![bool::from_jobject(
+                    &mut env, &value,
+                )]));
+            }
+            DataType::Int8 => {
+                columns[index] = Arc::new(Int8Array::from(vec![i8::from_jobject(&mut env, &value)]))
+            }
+            DataType::Int16 => {
+                columns[index] =
+                    Arc::new(Int16Array::from(vec![i16::from_jobject(&mut env, &value)]))
+            }
+            DataType::Int32 => {
+                columns[index] =
+                    Arc::new(Int32Array::from(vec![i32::from_jobject(&mut env, &value)]))
+            }
+            DataType::Int64 => {
+                columns[index] =
+                    Arc::new(Int64Array::from(vec![i64::from_jobject(&mut env, &value)]))
+            }
+            DataType::Float32 => {
+                columns[index] = Arc::new(Float32Array::from(vec![f32::from_jobject(
+                    &mut env, &value,
+                )]))
+            }
+            DataType::Float64 => {
+                columns[index] = Arc::new(Float64Array::from(vec![f64::from_jobject(
+                    &mut env, &value,
+                )]))
+            }
+            _ => {}
+        }
+    }
+
+    let batch = RecordBatch::try_new(schema, columns).unwrap();
+    writer.writer.write(&batch).unwrap();
 }
