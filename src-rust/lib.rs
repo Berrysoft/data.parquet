@@ -1,9 +1,11 @@
 #![allow(clippy::missing_safety_doc)]
 
 use arrow_array::RecordBatchReader;
+use arrow_buffer::ArrowNativeType;
+use arrow_data::Buffers;
 use arrow_schema::DataType;
 use jni::{
-    objects::{JClass, JObject, JString, JValue},
+    objects::{JClass, JObject, JPrimitiveArray, JString, JValue, TypeArray},
     sys::{jlong, jobject},
     JNIEnv,
 };
@@ -76,6 +78,47 @@ pub unsafe extern "system" fn Java_data_ParquetNative_getColumns<'local>(
     list.into_raw()
 }
 
+fn concat_buffers<'local, T: TypeArray + ArrowNativeType>(
+    buffers: Buffers,
+    env: &JNIEnv<'local>,
+) -> JObject<'local>
+where
+    Vec<T>: ToJPrimitiveArray<T>,
+{
+    let mut vec: Vec<T> = vec![];
+    for buffer in buffers {
+        vec.extend_from_slice(buffer.typed_data());
+    }
+    vec.to_primitive_array(env).into()
+}
+
+trait ToJPrimitiveArray<T: TypeArray + ArrowNativeType> {
+    fn to_primitive_array<'local>(&self, env: &JNIEnv<'local>) -> JPrimitiveArray<'local, T>;
+}
+
+macro_rules! impl_to_primitive_array {
+    ($t: ty, $new_method: ident, $set_method: ident) => {
+        impl ToJPrimitiveArray<$t> for Vec<$t> {
+            fn to_primitive_array<'local>(
+                &self,
+                env: &JNIEnv<'local>,
+            ) -> JPrimitiveArray<'local, $t> {
+                let arr = env.$new_method(self.len() as _).unwrap();
+                env.$set_method(&arr, 0, self.as_slice()).unwrap();
+                arr
+            }
+        }
+    };
+}
+
+impl_to_primitive_array!(u8, new_boolean_array, set_boolean_array_region);
+impl_to_primitive_array!(i8, new_byte_array, set_byte_array_region);
+impl_to_primitive_array!(i16, new_short_array, set_short_array_region);
+impl_to_primitive_array!(i32, new_int_array, set_int_array_region);
+impl_to_primitive_array!(i64, new_long_array, set_long_array_region);
+impl_to_primitive_array!(f32, new_float_array, set_float_array_region);
+impl_to_primitive_array!(f64, new_double_array, set_double_array_region);
+
 #[no_mangle]
 pub unsafe extern "system" fn Java_data_ParquetNative_getColumn<'local>(
     mut env: JNIEnv<'local>,
@@ -98,55 +141,19 @@ pub unsafe extern "system" fn Java_data_ParquetNative_getColumn<'local>(
     for batch in reader {
         let batch = batch.unwrap();
         let col = batch.column_by_name(&name).unwrap();
-        for buffer in col.to_data().buffers() {
-            let len = buffer.len();
-            let obj: JObject = match col.data_type() {
-                DataType::Boolean => {
-                    let arr = env.new_boolean_array(len as _).unwrap();
-                    env.set_boolean_array_region(&arr, 0, buffer.typed_data())
-                        .unwrap();
-                    arr.into()
-                }
-                DataType::Int8 | DataType::UInt8 => {
-                    let arr = env.new_byte_array(len as _).unwrap();
-                    env.set_byte_array_region(&arr, 0, buffer.typed_data())
-                        .unwrap();
-                    arr.into()
-                }
-                DataType::Int16 | DataType::UInt16 => {
-                    let arr = env.new_short_array(len as _).unwrap();
-                    env.set_short_array_region(&arr, 0, buffer.typed_data())
-                        .unwrap();
-                    arr.into()
-                }
-                DataType::Int32 | DataType::UInt32 => {
-                    let arr = env.new_int_array(len as _).unwrap();
-                    env.set_int_array_region(&arr, 0, buffer.typed_data())
-                        .unwrap();
-                    arr.into()
-                }
-                DataType::Int64 | DataType::UInt64 => {
-                    let arr = env.new_long_array(len as _).unwrap();
-                    env.set_long_array_region(&arr, 0, buffer.typed_data())
-                        .unwrap();
-                    arr.into()
-                }
-                DataType::Float32 => {
-                    let arr = env.new_float_array(len as _).unwrap();
-                    env.set_float_array_region(&arr, 0, buffer.typed_data())
-                        .unwrap();
-                    arr.into()
-                }
-                DataType::Float64 => {
-                    let arr = env.new_double_array(len as _).unwrap();
-                    env.set_double_array_region(&arr, 0, buffer.typed_data())
-                        .unwrap();
-                    arr.into()
-                }
-                _ => continue,
-            };
-            add_array_list(&mut env, &list, &obj)
-        }
+        let data = col.to_data();
+        let buffers = data.buffers();
+        let obj = match col.data_type() {
+            DataType::Boolean => concat_buffers::<u8>(buffers, &env),
+            DataType::Int8 | DataType::UInt8 => concat_buffers::<i8>(buffers, &env),
+            DataType::Int16 | DataType::UInt16 => concat_buffers::<i16>(buffers, &env),
+            DataType::Int32 | DataType::UInt32 => concat_buffers::<i32>(buffers, &env),
+            DataType::Int64 | DataType::UInt64 => concat_buffers::<i64>(buffers, &env),
+            DataType::Float32 => concat_buffers::<f32>(buffers, &env),
+            DataType::Float64 => concat_buffers::<f64>(buffers, &env),
+            _ => continue,
+        };
+        add_array_list(&mut env, &list, &obj)
     }
     list.into_raw()
 }
