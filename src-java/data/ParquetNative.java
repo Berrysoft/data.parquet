@@ -20,7 +20,7 @@ public class ParquetNative {
 
     public static native Object columnNext(long col);
 
-    public static native long openWriter(String path, Map<String, Class> schema);
+    public static native long openWriter(String path, Map<String, Class<?>> schema);
 
     public static native void closeWriter(long writer);
 
