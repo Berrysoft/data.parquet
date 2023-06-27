@@ -1,15 +1,15 @@
 package data;
 
-import java.util.Iterator;
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.Iterator;
 
-public class ParquetColumn implements Iterator<Object>, Closeable {
+public class ParquetColumnIterator implements Iterator<Object>, Closeable {
     private long col;
 
     private Object current;
 
-    public ParquetColumn(long col) {
+    public ParquetColumnIterator(long col) {
         this.col = col;
     }
 
@@ -19,10 +19,7 @@ public class ParquetColumn implements Iterator<Object>, Closeable {
 
     @Override
     public boolean hasNext() {
-        if (current == null) {
-            current = fetchNext();
-        }
-        return current != null;
+        return getCurrent() != null;
     }
 
     @Override
@@ -34,6 +31,13 @@ public class ParquetColumn implements Iterator<Object>, Closeable {
             current = null;
             return res;
         }
+    }
+
+    public Object getCurrent() {
+        if (current == null) {
+            current = fetchNext();
+        }
+        return current;
     }
 
     @Override
