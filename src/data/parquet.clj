@@ -2,23 +2,21 @@
   (:gen-class))
 
 (import data.ParquetNative)
-
-(deftype ParquetColumn [reader key]
-  clojure.lang.IFn
-  (invoke [this]
-    (flatten (map #(seq %) (ParquetNative/getColumn reader (name key))))))
+(import data.ParquetColumn)
 
 (defprotocol IParquetFile
   (getColumns [this])
-  (getColumn [this k])
-  (close [this]))
+  (getColumn [this k]))
 
 (deftype ParquetFile [reader]
   IParquetFile
   (getColumns [this]
     (map #(keyword %) (ParquetNative/getColumns reader)))
   (getColumn [this k]
-    (ParquetColumn. reader k))
+    (with-open [col (ParquetColumn. (ParquetNative/getColumn reader (name k)))]
+      (flatten (map #(seq %) (iterator-seq col)))))
+
+  java.io.Closeable
   (close [this]
     (ParquetNative/close reader))
 

@@ -9,7 +9,7 @@ use jni::{
     sys::{jlong, jobject},
     JNIEnv,
 };
-use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
+use parquet::arrow::arrow_reader::{ParquetRecordBatchReader, ParquetRecordBatchReaderBuilder};
 use std::fs::File;
 
 struct NativeReader {
@@ -119,41 +119,69 @@ impl_to_primitive_array!(i64, new_long_array, set_long_array_region);
 impl_to_primitive_array!(f32, new_float_array, set_float_array_region);
 impl_to_primitive_array!(f64, new_double_array, set_double_array_region);
 
+struct NativeColumn {
+    name: String,
+    reader: ParquetRecordBatchReader,
+}
+
+impl NativeColumn {
+    pub fn next<'local>(&mut self, env: &JNIEnv<'local>) -> Option<JObject<'local>> {
+        self.reader.next().map(|batch| {
+            let batch = batch.unwrap();
+            let col = batch.column_by_name(&self.name).unwrap();
+            let data = col.to_data();
+            let buffers = data.buffers();
+            match col.data_type() {
+                DataType::Boolean => concat_buffers::<u8>(buffers, env),
+                DataType::Int8 | DataType::UInt8 => concat_buffers::<i8>(buffers, env),
+                DataType::Int16 | DataType::UInt16 => concat_buffers::<i16>(buffers, env),
+                DataType::Int32 | DataType::UInt32 => concat_buffers::<i32>(buffers, env),
+                DataType::Int64 | DataType::UInt64 => concat_buffers::<i64>(buffers, env),
+                DataType::Float32 => concat_buffers::<f32>(buffers, env),
+                DataType::Float64 => concat_buffers::<f64>(buffers, env),
+                _ => JObject::null(),
+            }
+        })
+    }
+}
+
 #[no_mangle]
 pub unsafe extern "system" fn Java_data_ParquetNative_getColumn<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     reader: jlong,
     name: JString<'local>,
-) -> jobject {
+) -> jlong {
     let reader = reader as *mut NativeReader;
     let reader = reader.as_ref().unwrap().clone();
 
     let name: String = env.get_string(&name).unwrap().into();
-
-    let list = new_array_list(&mut env);
 
     let reader = ParquetRecordBatchReaderBuilder::try_new(reader.file)
         .unwrap()
         .build()
         .unwrap();
 
-    for batch in reader {
-        let batch = batch.unwrap();
-        let col = batch.column_by_name(&name).unwrap();
-        let data = col.to_data();
-        let buffers = data.buffers();
-        let obj = match col.data_type() {
-            DataType::Boolean => concat_buffers::<u8>(buffers, &env),
-            DataType::Int8 | DataType::UInt8 => concat_buffers::<i8>(buffers, &env),
-            DataType::Int16 | DataType::UInt16 => concat_buffers::<i16>(buffers, &env),
-            DataType::Int32 | DataType::UInt32 => concat_buffers::<i32>(buffers, &env),
-            DataType::Int64 | DataType::UInt64 => concat_buffers::<i64>(buffers, &env),
-            DataType::Float32 => concat_buffers::<f32>(buffers, &env),
-            DataType::Float64 => concat_buffers::<f64>(buffers, &env),
-            _ => continue,
-        };
-        add_array_list(&mut env, &list, &obj)
-    }
-    list.into_raw()
+    let reader = NativeColumn { name, reader };
+    Box::leak(Box::new(reader)) as *mut _ as jlong
+}
+
+#[no_mangle]
+pub unsafe extern "system" fn Java_data_ParquetNative_closeColumn<'local>(
+    _env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    col: jlong,
+) {
+    let _: Box<NativeColumn> = Box::from_raw(col as *mut _);
+}
+
+#[no_mangle]
+pub unsafe extern "system" fn Java_data_ParquetNative_columnNext<'local>(
+    env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    col: jlong,
+) -> jobject {
+    let col = col as *mut NativeColumn;
+    let col = col.as_mut().unwrap();
+    col.next(&env).unwrap_or_default().into_raw()
 }

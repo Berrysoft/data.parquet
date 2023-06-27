@@ -13,5 +13,9 @@ public class ParquetNative {
 
     public static native List<String> getColumns(long reader);
 
-    public static native List<Object> getColumn(long reader, String name);
+    public static native long getColumn(long reader, String name);
+
+    public static native void closeColumn(long col);
+
+    public static native Object columnNext(long col);
 }
