@@ -1,7 +1,7 @@
 use jni::{objects::JClass, sys::jstring, JNIEnv};
 
 #[no_mangle]
-pub extern "system" fn Java_berrysoft_data_ParquetNative_hello<'local>(
+pub extern "system" fn Java_data_ParquetNative_hello<'local>(
     env: JNIEnv<'local>,
     _class: JClass<'local>,
 ) -> jstring {

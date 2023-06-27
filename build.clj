@@ -1,7 +1,7 @@
 (ns build
   (:require [clojure.tools.build.api :as b]))
 
-(def lib 'clojure-jni/clojure-jni.core)
+(def lib 'berrysoft/data.parquet)
 (def version (format "0.1.0-%s" (b/git-count-revs nil)))
 (def class-dir "target/classes")
 (def basis (b/create-basis {:project "deps.edn"}))
@@ -19,6 +19,4 @@
   (b/process {:command-args ["cargo" "build"]})
   (b/compile-clj {:basis basis
                   :src-dirs ["src"]
-                  :class-dir class-dir})
-  (b/jar {:class-dir class-dir
-          :jar-file jar-file}))
+                  :class-dir class-dir}))

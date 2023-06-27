@@ -1,4 +1,4 @@
-package berrysoft.data;
+package data;
 
 public class ParquetNative {
     static {
