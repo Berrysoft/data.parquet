@@ -4,7 +4,7 @@ use arrow_array::{
     new_empty_array, BooleanArray, Float32Array, Float64Array, Int16Array, Int32Array, Int64Array,
     Int8Array, RecordBatch, RecordBatchReader,
 };
-use arrow_buffer::ArrowNativeType;
+use arrow_buffer::{bit_iterator::BitIterator, ArrowNativeType};
 use arrow_data::Buffers;
 use arrow_schema::{DataType, Field, Schema};
 use jni::{
@@ -79,6 +79,21 @@ pub unsafe extern "system" fn Java_data_ParquetNative_getColumns<'local>(
     list_raw.into_raw()
 }
 
+fn concat_buffers_bool<'local>(
+    buffers: Buffers,
+    env: &JNIEnv<'local>,
+    len: usize,
+) -> JObject<'local> {
+    let mut buf = vec![];
+    for buffer in buffers {
+        buf.extend_from_slice(buffer.as_slice());
+    }
+    let vec = BitIterator::new(&buf, 0, len)
+        .map(|bit| bit as u8)
+        .collect::<Vec<_>>();
+    vec.to_primitive_array(env).into()
+}
+
 fn concat_buffers<'local, T: TypeArray + ArrowNativeType>(
     buffers: Buffers,
     env: &JNIEnv<'local>,
@@ -133,7 +148,7 @@ impl NativeColumn {
             let data = col.to_data();
             let buffers = data.buffers();
             match col.data_type() {
-                DataType::Boolean => concat_buffers::<u8>(buffers, env),
+                DataType::Boolean => concat_buffers_bool(buffers, env, data.len()),
                 DataType::Int8 | DataType::UInt8 => concat_buffers::<i8>(buffers, env),
                 DataType::Int16 | DataType::UInt16 => concat_buffers::<i16>(buffers, env),
                 DataType::Int32 | DataType::UInt32 => concat_buffers::<i32>(buffers, env),
@@ -219,13 +234,13 @@ pub unsafe extern "system" fn Java_data_ParquetNative_openWriter<'local>(
         );
         let ty_name: String = env.get_string(&ty_name).unwrap().into();
         let ty = match ty_name.as_str() {
-            "Ljava/lang/Boolean" => DataType::Boolean,
-            "Ljava/lang/Byte" => DataType::Int8,
-            "Ljava/lang/Short" => DataType::Int16,
-            "Ljava/lang/Integer" => DataType::Int32,
-            "Ljava/lang/Long" => DataType::Int64,
-            "Ljava/lang/Float" => DataType::Float32,
-            "Ljava/lang/Double" => DataType::Float64,
+            "java.lang.Boolean" => DataType::Boolean,
+            "java.lang.Byte" => DataType::Int8,
+            "java.lang.Short" => DataType::Int16,
+            "java.lang.Integer" => DataType::Int32,
+            "java.lang.Long" => DataType::Int64,
+            "java.lang.Float" => DataType::Float32,
+            "java.lang.Double" => DataType::Float64,
             _ => DataType::Null,
         };
         fields.push(Field::new(key, ty, false));
