@@ -3,6 +3,6 @@
 
 (import data.ParquetNative)
 
-(defn hello
-  []
-  (ParquetNative/hello))
+(defn open
+  [path]
+  (ParquetNative/open path))
