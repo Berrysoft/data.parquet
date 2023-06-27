@@ -1,3 +1,5 @@
+#![allow(clippy::missing_safety_doc)]
+
 use arrow_array::RecordBatchReader;
 use arrow_schema::DataType;
 use jni::{
@@ -99,6 +101,12 @@ pub unsafe extern "system" fn Java_data_ParquetNative_getColumn<'local>(
         for buffer in col.to_data().buffers() {
             let len = buffer.len();
             let obj: JObject = match col.data_type() {
+                DataType::Boolean => {
+                    let arr = env.new_boolean_array(len as _).unwrap();
+                    env.set_boolean_array_region(&arr, 0, buffer.typed_data())
+                        .unwrap();
+                    arr.into()
+                }
                 DataType::Int8 | DataType::UInt8 => {
                     let arr = env.new_byte_array(len as _).unwrap();
                     env.set_byte_array_region(&arr, 0, buffer.typed_data())
@@ -108,6 +116,30 @@ pub unsafe extern "system" fn Java_data_ParquetNative_getColumn<'local>(
                 DataType::Int16 | DataType::UInt16 => {
                     let arr = env.new_short_array(len as _).unwrap();
                     env.set_short_array_region(&arr, 0, buffer.typed_data())
+                        .unwrap();
+                    arr.into()
+                }
+                DataType::Int32 | DataType::UInt32 => {
+                    let arr = env.new_int_array(len as _).unwrap();
+                    env.set_int_array_region(&arr, 0, buffer.typed_data())
+                        .unwrap();
+                    arr.into()
+                }
+                DataType::Int64 | DataType::UInt64 => {
+                    let arr = env.new_long_array(len as _).unwrap();
+                    env.set_long_array_region(&arr, 0, buffer.typed_data())
+                        .unwrap();
+                    arr.into()
+                }
+                DataType::Float32 => {
+                    let arr = env.new_float_array(len as _).unwrap();
+                    env.set_float_array_region(&arr, 0, buffer.typed_data())
+                        .unwrap();
+                    arr.into()
+                }
+                DataType::Float64 => {
+                    let arr = env.new_double_array(len as _).unwrap();
+                    env.set_double_array_region(&arr, 0, buffer.typed_data())
                         .unwrap();
                     arr.into()
                 }
