@@ -1,12 +1,17 @@
 package data;
 
 import java.util.List;
-import java.util.Map;
 
 public class ParquetNative {
     static {
         System.loadLibrary("berrysoft_data_parquet_jni");
     }
 
-    public static native Map<String, List<Object>> open(String path);
+    public static native long open(String path);
+
+    public static native void close(long reader);
+
+    public static native List<String> getColumns(long reader);
+
+    public static native List<Object> getColumn(long reader, String name);
 }

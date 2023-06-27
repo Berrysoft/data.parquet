@@ -11,3 +11,4 @@ crate-type = ["cdylib"]
 jni = "0.21"
 parquet = "42"
 arrow-array = "42"
+arrow-schema = "42"

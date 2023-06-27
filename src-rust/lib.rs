@@ -1,37 +1,120 @@
 use arrow_array::RecordBatchReader;
+use arrow_schema::DataType;
 use jni::{
-    objects::{JClass, JString, JValue},
-    sys::jobject,
+    objects::{JClass, JObject, JString, JValue},
+    sys::{jlong, jobject},
     JNIEnv,
 };
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use std::fs::File;
+
+struct NativeReader {
+    file: File,
+}
+
+impl Clone for NativeReader {
+    fn clone(&self) -> Self {
+        Self {
+            file: self.file.try_clone().unwrap(),
+        }
+    }
+}
 
 #[no_mangle]
 pub extern "system" fn Java_data_ParquetNative_open<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     path: JString<'local>,
-) -> jobject {
+) -> jlong {
     let path: String = env.get_string(&path).unwrap().into();
-    let reader = ParquetRecordBatchReaderBuilder::try_new(File::open(path).unwrap())
+    let file = File::open(path).unwrap();
+    let reader = NativeReader { file };
+    let reader = Box::new(reader);
+    Box::leak(reader) as *mut _ as jlong
+}
+
+#[no_mangle]
+pub unsafe extern "system" fn Java_data_ParquetNative_close<'local>(
+    _env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    reader: jlong,
+) {
+    let _: Box<NativeReader> = Box::from_raw(reader as *mut _);
+}
+
+fn new_array_list<'local>(env: &mut JNIEnv<'local>) -> JObject<'local> {
+    env.new_object("Ljava/util/ArrayList;", "()V", &[]).unwrap()
+}
+
+fn add_array_list<'local>(env: &mut JNIEnv<'local>, list: &JObject<'local>, obj: &JObject<'local>) {
+    env.call_method(list, "add", "(Ljava/lang/Object;)Z", &[JValue::Object(obj)])
+        .unwrap();
+}
+
+#[no_mangle]
+pub unsafe extern "system" fn Java_data_ParquetNative_getColumns<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    reader: jlong,
+) -> jobject {
+    let reader = reader as *mut NativeReader;
+    let reader = reader.as_ref().unwrap().clone();
+
+    let list = new_array_list(&mut env);
+
+    let reader = ParquetRecordBatchReaderBuilder::try_new(reader.file)
         .unwrap()
         .build()
         .unwrap();
 
-    let map = env.new_object("Ljava/util/HashMap;", "()V", &[]).unwrap();
-
-    let schema = reader.schema();
-    for f in schema.fields() {
-        let list = env.new_object("Ljava/util/ArrayList;", "()V", &[]).unwrap();
+    for f in reader.schema().fields() {
         let name = env.new_string(f.name()).unwrap();
-        env.call_method(
-            &map,
-            "put",
-            "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
-            &[JValue::Object(&name), JValue::Object(&list)],
-        )
-        .unwrap();
+        add_array_list(&mut env, &list, &name);
     }
-    map.into_raw()
+    list.into_raw()
+}
+
+#[no_mangle]
+pub unsafe extern "system" fn Java_data_ParquetNative_getColumn<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    reader: jlong,
+    name: JString<'local>,
+) -> jobject {
+    let reader = reader as *mut NativeReader;
+    let reader = reader.as_ref().unwrap().clone();
+
+    let name: String = env.get_string(&name).unwrap().into();
+
+    let list = new_array_list(&mut env);
+
+    let reader = ParquetRecordBatchReaderBuilder::try_new(reader.file)
+        .unwrap()
+        .build()
+        .unwrap();
+
+    for batch in reader {
+        let batch = batch.unwrap();
+        let col = batch.column_by_name(&name).unwrap();
+        for buffer in col.to_data().buffers() {
+            let len = buffer.len();
+            let obj: JObject = match col.data_type() {
+                DataType::Int8 | DataType::UInt8 => {
+                    let arr = env.new_byte_array(len as _).unwrap();
+                    env.set_byte_array_region(&arr, 0, buffer.typed_data())
+                        .unwrap();
+                    arr.into()
+                }
+                DataType::Int16 | DataType::UInt16 => {
+                    let arr = env.new_short_array(len as _).unwrap();
+                    env.set_short_array_region(&arr, 0, buffer.typed_data())
+                        .unwrap();
+                    arr.into()
+                }
+                _ => continue,
+            };
+            add_array_list(&mut env, &list, &obj)
+        }
+    }
+    list.into_raw()
 }
