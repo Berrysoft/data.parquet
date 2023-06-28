@@ -87,11 +87,18 @@
 (defn- java-class-map [m]
   (let [jmap (java.util.HashMap.)]
     (doseq [[key value] m]
-      (.put jmap (name key) (class value)))
+      (.put
+       jmap (name key)
+       (cond
+         (seq? value) (class (first value))
+         (vector? value) (class (first value))
+         :else (class value))))
     jmap))
 
 (defn save-parquet [path data]
-  (let [f (first data)]
+  (let [seq-data (if (map? data) [data] data)
+        f (first seq-data)]
+    (assert (map? f))
     (with-open [writer (ParquetWriter. (ParquetNative/openWriter path (java-class-map f)))]
-      (doseq [row data]
+      (doseq [row seq-data]
         (.add writer (java-map row))))))

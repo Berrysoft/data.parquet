@@ -204,6 +204,17 @@ pub unsafe extern "system" fn Java_data_ParquetNative_columnNext<'local>(
     col.next(&env).unwrap_or_default().into_raw()
 }
 
+unsafe fn get_class_name<'local>(env: &mut JNIEnv<'local>, class: &JClass<'local>) -> String {
+    let ty_name = JString::from_raw(
+        env.call_method(&class, "getName", "()Ljava/lang/String;", &[])
+            .unwrap()
+            .l()
+            .unwrap()
+            .into_raw(),
+    );
+    env.get_string(&ty_name).unwrap().into()
+}
+
 struct NativeWriter {
     schema: Arc<Schema>,
     writer: ArrowWriter<File>,
@@ -226,15 +237,8 @@ pub unsafe extern "system" fn Java_data_ParquetNative_openWriter<'local>(
         let ty = env.auto_local(JClass::from_raw(ty.into_raw()));
 
         let key: String = env.get_string(&key).unwrap().into();
+        let ty_name = get_class_name(&mut env, &ty);
 
-        let ty_name = JString::from_raw(
-            env.call_method(&ty, "getTypeName", "()Ljava/lang/String;", &[])
-                .unwrap()
-                .l()
-                .unwrap()
-                .into_raw(),
-        );
-        let ty_name: String = env.get_string(&ty_name).unwrap().into();
         let ty = match ty_name.as_str() {
             "java.lang.Boolean" => DataType::Boolean,
             "java.lang.Byte" => DataType::Int8,
@@ -266,7 +270,7 @@ pub unsafe extern "system" fn Java_data_ParquetNative_closeWriter<'local>(
     writer.writer.close().unwrap();
 }
 
-trait FromJObject {
+trait FromJObject: Sized {
     fn from_jobject<'local>(env: &mut JNIEnv<'local>, obj: &JObject<'local>) -> Self;
 }
 
@@ -290,6 +294,39 @@ impl_from_jobject!(i32, "integerValue", "()I", i);
 impl_from_jobject!(i64, "longValue", "()J", j);
 impl_from_jobject!(f32, "floatValue", "()F", f);
 impl_from_jobject!(f64, "doubleValue", "()D", d);
+
+fn from_jobject<'local, T: FromJObject>(env: &mut JNIEnv<'local>, obj: &JObject<'local>) -> Vec<T> {
+    let class = env.get_object_class(obj).unwrap();
+    let ty_name = unsafe { get_class_name(env, &class) };
+    match ty_name.as_str() {
+        "clojure.lang.PersistentVector" => {
+            let iterator = env
+                .call_method(obj, "iterator", "()Ljava/util/Iterator;", &[])
+                .unwrap()
+                .l()
+                .unwrap();
+            let mut res = vec![];
+            loop {
+                let has_next = env
+                    .call_method(&iterator, "hasNext", "()Z", &[])
+                    .unwrap()
+                    .z()
+                    .unwrap();
+                if !has_next {
+                    break;
+                }
+                let next = env
+                    .call_method(&iterator, "next", "()Ljava/lang/Object;", &[])
+                    .unwrap()
+                    .l()
+                    .unwrap();
+                res.push(T::from_jobject(env, &next));
+            }
+            res
+        }
+        _ => vec![T::from_jobject(env, obj)],
+    }
+}
 
 #[no_mangle]
 pub unsafe extern "system" fn Java_data_ParquetNative_writeRow<'local>(
@@ -319,34 +356,26 @@ pub unsafe extern "system" fn Java_data_ParquetNative_writeRow<'local>(
 
         match field.data_type() {
             DataType::Boolean => {
-                columns[index] = Arc::new(BooleanArray::from(vec![bool::from_jobject(
-                    &mut env, &value,
-                )]));
+                columns[index] =
+                    Arc::new(BooleanArray::from(from_jobject::<bool>(&mut env, &value)));
             }
             DataType::Int8 => {
-                columns[index] = Arc::new(Int8Array::from(vec![i8::from_jobject(&mut env, &value)]))
+                columns[index] = Arc::new(Int8Array::from(from_jobject::<i8>(&mut env, &value)))
             }
             DataType::Int16 => {
-                columns[index] =
-                    Arc::new(Int16Array::from(vec![i16::from_jobject(&mut env, &value)]))
+                columns[index] = Arc::new(Int16Array::from(from_jobject::<i16>(&mut env, &value)))
             }
             DataType::Int32 => {
-                columns[index] =
-                    Arc::new(Int32Array::from(vec![i32::from_jobject(&mut env, &value)]))
+                columns[index] = Arc::new(Int32Array::from(from_jobject::<i32>(&mut env, &value)))
             }
             DataType::Int64 => {
-                columns[index] =
-                    Arc::new(Int64Array::from(vec![i64::from_jobject(&mut env, &value)]))
+                columns[index] = Arc::new(Int64Array::from(from_jobject::<i64>(&mut env, &value)))
             }
             DataType::Float32 => {
-                columns[index] = Arc::new(Float32Array::from(vec![f32::from_jobject(
-                    &mut env, &value,
-                )]))
+                columns[index] = Arc::new(Float32Array::from(from_jobject::<f32>(&mut env, &value)))
             }
             DataType::Float64 => {
-                columns[index] = Arc::new(Float64Array::from(vec![f64::from_jobject(
-                    &mut env, &value,
-                )]))
+                columns[index] = Arc::new(Float64Array::from(from_jobject::<f64>(&mut env, &value)))
             }
             _ => {}
         }
