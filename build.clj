@@ -12,11 +12,23 @@
             :class-dir class-dir
             :javac-opts ["-h" "target/jni"]}))
 
-(defn jar [_]
+(def cargo-command
+  ["cargo" "build"])
+
+(defn- jar-opt [rel]
   (b/copy-dir {:src-dirs ["src"]
                :target-dir class-dir})
   (generate nil)
-  (b/process {:command-args ["cargo" "build"]})
+  (b/process {:command-args
+              (if rel
+                (conj cargo-command "--release")
+                cargo-command)})
   (b/compile-clj {:basis basis
                   :src-dirs ["src"]
                   :class-dir class-dir}))
+
+(defn jar-debug [_]
+  (jar-opt false))
+
+(defn jar-release [_]
+  (jar-opt true))
