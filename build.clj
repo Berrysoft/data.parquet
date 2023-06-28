@@ -10,6 +10,7 @@
 (defn generate [_]
   (b/javac {:src-dirs ["src-java"]
             :class-dir class-dir
+            :basis basis
             :javac-opts ["-h" "target/jni"]}))
 
 (def cargo-command

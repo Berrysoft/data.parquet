@@ -3,32 +3,27 @@
 
 (import berrysoft.data.ParquetNative)
 (import berrysoft.data.ParquetColumnIterator)
-
-(deftype ParquetColumn [reader key]
-  clojure.lang.IFn
-  (invoke [this]
-    (.seq this))
-
-  clojure.lang.Seqable
-  (seq [_this]
-    (with-open [col (ParquetColumnIterator. (ParquetNative/getColumn reader (name key)))]
-      (flatten (map #(seq %) (iterator-seq col))))))
+(import berrysoft.data.ParquetColumnSeq)
 
 #_{:clj-kondo/ignore [:clojure-lsp/unused-public-var]}
 (defprotocol IParquetFile
   (getColumns [this])
   (getColumn [this k]))
 
-(deftype ParquetFile [reader]
+(deftype ParquetFile [reader ^:volatile-mutable cols]
   IParquetFile
   (getColumns [_this]
     (map #(keyword %) (ParquetNative/getColumns reader)))
   (getColumn [_this k]
-    (ParquetColumn. reader k))
+    (let [col (ParquetNative/getColumn reader (name k))]
+      (set! cols (conj cols col))
+      (flatten (map #(seq %) (ParquetColumnSeq. (ParquetColumnIterator. col))))))
 
   java.lang.AutoCloseable
   (close [_this]
-    (ParquetNative/closeReader reader))
+    (ParquetNative/closeReader reader)
+    (doseq [col cols]
+      (ParquetNative/closeColumn col)))
 
   clojure.lang.Associative
   (containsKey [this k]
@@ -63,7 +58,7 @@
     (str (.getColumns this))))
 
 (defn open-parquet [path]
-  (ParquetFile. (ParquetNative/openReader path)))
+  (ParquetFile. (ParquetNative/openReader path) []))
 
 #_{:clj-kondo/ignore [:clojure-lsp/unused-public-var]}
 (defprotocol IParquetWriter

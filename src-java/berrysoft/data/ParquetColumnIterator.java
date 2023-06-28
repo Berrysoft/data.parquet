@@ -42,5 +42,6 @@ public class ParquetColumnIterator implements Iterator<Object>, AutoCloseable {
     @Override
     public void close() throws Exception {
         ParquetNative.closeColumn(col);
+        col = 0;
     }
 }
