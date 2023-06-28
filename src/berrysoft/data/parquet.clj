@@ -2,7 +2,6 @@
   (:gen-class))
 
 (import berrysoft.data.ParquetNative)
-(import berrysoft.data.ParquetColumnIterator)
 (import berrysoft.data.ParquetColumnSeq)
 
 #_{:clj-kondo/ignore [:clojure-lsp/unused-public-var]}
@@ -17,7 +16,7 @@
   (getColumn [_this k]
     (let [col (ParquetNative/getColumn reader (name k))]
       (set! cols (conj cols col))
-      (flatten (map #(seq %) (ParquetColumnSeq. (ParquetColumnIterator. col))))))
+      (flatten (map #(seq %) (ParquetColumnSeq. col)))))
 
   java.lang.AutoCloseable
   (close [_this]
