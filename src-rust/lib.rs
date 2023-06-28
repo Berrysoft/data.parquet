@@ -1,8 +1,8 @@
 #![allow(clippy::missing_safety_doc)]
 
 use arrow_array::{
-    new_empty_array, BooleanArray, Float32Array, Float64Array, Int16Array, Int32Array, Int64Array,
-    Int8Array, RecordBatch, RecordBatchReader,
+    new_empty_array, Array, BooleanArray, Float32Array, Float64Array, Int16Array, Int32Array,
+    Int64Array, Int8Array, RecordBatch, RecordBatchReader,
 };
 use arrow_buffer::{bit_iterator::BitIterator, ArrowNativeType};
 use arrow_data::Buffers;
@@ -271,12 +271,16 @@ pub unsafe extern "system" fn Java_data_ParquetNative_closeWriter<'local>(
 }
 
 trait FromJObject: Sized {
+    type TArray: Array;
+
     fn from_jobject<'local>(env: &mut JNIEnv<'local>, obj: &JObject<'local>) -> Self;
 }
 
 macro_rules! impl_from_jobject {
-    ($t: ty, $unbox_method: expr, $unbox_sig: expr, $unbox: ident) => {
+    ($t: ty, $arrt: ty, $unbox_method: expr, $unbox_sig: expr, $unbox: ident) => {
         impl FromJObject for $t {
+            type TArray = $arrt;
+
             fn from_jobject<'local>(env: &mut JNIEnv<'local>, obj: &JObject<'local>) -> Self {
                 env.call_method(obj, $unbox_method, $unbox_sig, &[])
                     .unwrap()
@@ -287,13 +291,13 @@ macro_rules! impl_from_jobject {
     };
 }
 
-impl_from_jobject!(bool, "booleanValue", "()Z", z);
-impl_from_jobject!(i8, "byteValue", "()B", b);
-impl_from_jobject!(i16, "shortValue", "()S", s);
-impl_from_jobject!(i32, "integerValue", "()I", i);
-impl_from_jobject!(i64, "longValue", "()J", j);
-impl_from_jobject!(f32, "floatValue", "()F", f);
-impl_from_jobject!(f64, "doubleValue", "()D", d);
+impl_from_jobject!(bool, BooleanArray, "booleanValue", "()Z", z);
+impl_from_jobject!(i8, Int8Array, "byteValue", "()B", b);
+impl_from_jobject!(i16, Int16Array, "shortValue", "()S", s);
+impl_from_jobject!(i32, Int32Array, "integerValue", "()I", i);
+impl_from_jobject!(i64, Int64Array, "longValue", "()J", j);
+impl_from_jobject!(f32, Float32Array, "floatValue", "()F", f);
+impl_from_jobject!(f64, Float64Array, "doubleValue", "()D", d);
 
 fn is_instance<'local>(env: &mut JNIEnv<'local>, obj: &JObject<'local>, ty: &str) -> bool {
     let ty = env.find_class(ty).unwrap();
@@ -308,8 +312,14 @@ fn is_instance<'local>(env: &mut JNIEnv<'local>, obj: &JObject<'local>, ty: &str
     .unwrap()
 }
 
-fn from_jobject<'local, T: FromJObject>(env: &mut JNIEnv<'local>, obj: &JObject<'local>) -> Vec<T> {
-    if is_instance(env, obj, "clojure/lang/Seqable") {
+fn from_jobject<'local, T: FromJObject>(
+    env: &mut JNIEnv<'local>,
+    obj: &JObject<'local>,
+) -> Arc<dyn Array>
+where
+    T::TArray: From<Vec<T>> + 'static,
+{
+    let vec = if is_instance(env, obj, "clojure/lang/Seqable") {
         let mut seq = env
             .call_method(obj, "seq", "()Lclojure/lang/ISeq;", &[])
             .unwrap()
@@ -332,7 +342,8 @@ fn from_jobject<'local, T: FromJObject>(env: &mut JNIEnv<'local>, obj: &JObject<
         res
     } else {
         vec![T::from_jobject(env, obj)]
-    }
+    };
+    Arc::new(T::TArray::from(vec))
 }
 
 #[no_mangle]
@@ -362,28 +373,13 @@ pub unsafe extern "system" fn Java_data_ParquetNative_writeRow<'local>(
         let (index, field) = schema.fields().find(&key).unwrap();
 
         match field.data_type() {
-            DataType::Boolean => {
-                columns[index] =
-                    Arc::new(BooleanArray::from(from_jobject::<bool>(&mut env, &value)));
-            }
-            DataType::Int8 => {
-                columns[index] = Arc::new(Int8Array::from(from_jobject::<i8>(&mut env, &value)))
-            }
-            DataType::Int16 => {
-                columns[index] = Arc::new(Int16Array::from(from_jobject::<i16>(&mut env, &value)))
-            }
-            DataType::Int32 => {
-                columns[index] = Arc::new(Int32Array::from(from_jobject::<i32>(&mut env, &value)))
-            }
-            DataType::Int64 => {
-                columns[index] = Arc::new(Int64Array::from(from_jobject::<i64>(&mut env, &value)))
-            }
-            DataType::Float32 => {
-                columns[index] = Arc::new(Float32Array::from(from_jobject::<f32>(&mut env, &value)))
-            }
-            DataType::Float64 => {
-                columns[index] = Arc::new(Float64Array::from(from_jobject::<f64>(&mut env, &value)))
-            }
+            DataType::Boolean => columns[index] = from_jobject::<bool>(&mut env, &value),
+            DataType::Int8 => columns[index] = from_jobject::<i8>(&mut env, &value),
+            DataType::Int16 => columns[index] = from_jobject::<i16>(&mut env, &value),
+            DataType::Int32 => columns[index] = from_jobject::<i32>(&mut env, &value),
+            DataType::Int64 => columns[index] = from_jobject::<i64>(&mut env, &value),
+            DataType::Float32 => columns[index] = from_jobject::<f32>(&mut env, &value),
+            DataType::Float64 => columns[index] = from_jobject::<f64>(&mut env, &value),
             _ => {}
         }
     }
