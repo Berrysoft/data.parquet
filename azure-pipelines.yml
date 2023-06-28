@@ -1,0 +1,21 @@
+trigger:
+  branches:
+    include:
+      - master
+  paths:
+    exclude:
+      - .github/
+      - README.md
+
+pool: 'ubuntu-latest'
+
+steps:
+- script: |
+    eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+    brew install clojure/tools/clojure
+  displayName: 'Install clojure'
+
+- script: |
+    eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+    make test
+  displayName: 'Test'
