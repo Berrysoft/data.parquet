@@ -4,7 +4,7 @@
 (import java.nio.file.Paths)
 
 (deftype TempFile [path]
-  java.io.Closeable
+  java.lang.AutoCloseable
   (close [_this]
     (Files/deleteIfExists path)))
 

@@ -26,7 +26,7 @@
   (getColumn [_this k]
     (ParquetColumn. reader k))
 
-  java.io.Closeable
+  java.lang.AutoCloseable
   (close [_this]
     (ParquetNative/closeReader reader))
 
@@ -74,7 +74,7 @@
   (add [_this row]
     (ParquetNative/writeRow writer row))
 
-  java.io.Closeable
+  java.lang.AutoCloseable
   (close [_this]
     (ParquetNative/closeWriter writer)))
 

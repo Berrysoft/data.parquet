@@ -1,10 +1,9 @@
 package berrysoft.data;
 
-import java.io.Closeable;
-import java.io.IOException;
+import java.lang.AutoCloseable;
 import java.util.Iterator;
 
-public class ParquetColumnIterator implements Iterator<Object>, Closeable {
+public class ParquetColumnIterator implements Iterator<Object>, AutoCloseable {
     private long col;
 
     private Object current;
@@ -41,7 +40,7 @@ public class ParquetColumnIterator implements Iterator<Object>, Closeable {
     }
 
     @Override
-    public void close() throws IOException {
+    public void close() throws Exception {
         ParquetNative.closeColumn(col);
     }
 }
