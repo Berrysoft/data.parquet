@@ -1,7 +1,7 @@
-(ns data.parquet-test.basic-test
-  (:require [data.parquet :as pq]
+(ns berrysoft.data.parquet-test.basic-test
+  (:require [berrysoft.data.parquet :as pq]
             [clojure.test :refer [deftest is testing]]
-            [data.parquet-test.utils :as utils]))
+            [berrysoft.data.parquet-test.utils :as utils]))
 
 (def basic-path "test.pq")
 

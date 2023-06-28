@@ -1,4 +1,4 @@
-(ns data.parquet-test.utils)
+(ns berrysoft.data.parquet-test.utils)
 
 (import java.nio.file.Files)
 (import java.nio.file.Paths)

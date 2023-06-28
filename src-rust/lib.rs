@@ -31,7 +31,7 @@ impl Clone for NativeReader {
 }
 
 #[no_mangle]
-pub extern "system" fn Java_data_ParquetNative_openReader<'local>(
+pub extern "system" fn Java_berrysoft_data_ParquetNative_openReader<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     path: JString<'local>,
@@ -43,7 +43,7 @@ pub extern "system" fn Java_data_ParquetNative_openReader<'local>(
 }
 
 #[no_mangle]
-pub unsafe extern "system" fn Java_data_ParquetNative_closeReader<'local>(
+pub unsafe extern "system" fn Java_berrysoft_data_ParquetNative_closeReader<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
     reader: jlong,
@@ -56,7 +56,7 @@ fn new_array_list<'local>(env: &mut JNIEnv<'local>) -> JObject<'local> {
 }
 
 #[no_mangle]
-pub unsafe extern "system" fn Java_data_ParquetNative_getColumns<'local>(
+pub unsafe extern "system" fn Java_berrysoft_data_ParquetNative_getColumns<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     reader: jlong,
@@ -164,7 +164,7 @@ impl NativeColumn {
 }
 
 #[no_mangle]
-pub unsafe extern "system" fn Java_data_ParquetNative_getColumn<'local>(
+pub unsafe extern "system" fn Java_berrysoft_data_ParquetNative_getColumn<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     reader: jlong,
@@ -185,7 +185,7 @@ pub unsafe extern "system" fn Java_data_ParquetNative_getColumn<'local>(
 }
 
 #[no_mangle]
-pub unsafe extern "system" fn Java_data_ParquetNative_closeColumn<'local>(
+pub unsafe extern "system" fn Java_berrysoft_data_ParquetNative_closeColumn<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
     col: jlong,
@@ -194,7 +194,7 @@ pub unsafe extern "system" fn Java_data_ParquetNative_closeColumn<'local>(
 }
 
 #[no_mangle]
-pub unsafe extern "system" fn Java_data_ParquetNative_columnNext<'local>(
+pub unsafe extern "system" fn Java_berrysoft_data_ParquetNative_columnNext<'local>(
     env: JNIEnv<'local>,
     _class: JClass<'local>,
     col: jlong,
@@ -221,7 +221,7 @@ struct NativeWriter {
 }
 
 #[no_mangle]
-pub unsafe extern "system" fn Java_data_ParquetNative_openWriter<'local>(
+pub unsafe extern "system" fn Java_berrysoft_data_ParquetNative_openWriter<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     path: JString<'local>,
@@ -261,7 +261,7 @@ pub unsafe extern "system" fn Java_data_ParquetNative_openWriter<'local>(
 }
 
 #[no_mangle]
-pub unsafe extern "system" fn Java_data_ParquetNative_closeWriter<'local>(
+pub unsafe extern "system" fn Java_berrysoft_data_ParquetNative_closeWriter<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
     writer: jlong,
@@ -347,7 +347,7 @@ where
 }
 
 #[no_mangle]
-pub unsafe extern "system" fn Java_data_ParquetNative_writeRow<'local>(
+pub unsafe extern "system" fn Java_berrysoft_data_ParquetNative_writeRow<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     writer: jlong,

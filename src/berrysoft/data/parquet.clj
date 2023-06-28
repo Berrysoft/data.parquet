@@ -1,8 +1,8 @@
-(ns data.parquet
+(ns berrysoft.data.parquet
   (:gen-class))
 
-(import data.ParquetNative)
-(import data.ParquetColumnIterator)
+(import berrysoft.data.ParquetNative)
+(import berrysoft.data.ParquetColumnIterator)
 
 (deftype ParquetColumn [reader key]
   clojure.lang.IFn

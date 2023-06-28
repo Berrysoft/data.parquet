@@ -1,4 +1,4 @@
-package data;
+package berrysoft.data;
 
 import java.util.List;
 import java.util.Map;
