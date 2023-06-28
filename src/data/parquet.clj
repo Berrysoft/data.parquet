@@ -10,23 +10,24 @@
     (.seq this))
 
   clojure.lang.Seqable
-  (seq [this]
+  (seq [_this]
     (with-open [col (ParquetColumnIterator. (ParquetNative/getColumn reader (name key)))]
       (flatten (map #(seq %) (iterator-seq col))))))
 
+#_{:clj-kondo/ignore [:clojure-lsp/unused-public-var]}
 (defprotocol IParquetFile
   (getColumns [this])
   (getColumn [this k]))
 
 (deftype ParquetFile [reader]
   IParquetFile
-  (getColumns [this]
+  (getColumns [_this]
     (map #(keyword %) (ParquetNative/getColumns reader)))
-  (getColumn [this k]
+  (getColumn [_this k]
     (ParquetColumn. reader k))
 
   java.io.Closeable
-  (close [this]
+  (close [_this]
     (ParquetNative/closeReader reader))
 
   clojure.lang.Associative
@@ -64,16 +65,17 @@
 (defn open-parquet [path]
   (ParquetFile. (ParquetNative/openReader path)))
 
+#_{:clj-kondo/ignore [:clojure-lsp/unused-public-var]}
 (defprotocol IParquetWriter
   (add [this row]))
 
 (deftype ParquetWriter [writer]
   IParquetWriter
-  (add [this row]
+  (add [_this row]
     (ParquetNative/writeRow writer row))
 
   java.io.Closeable
-  (close [this]
+  (close [_this]
     (ParquetNative/closeWriter writer)))
 
 (defn -java-map [m]

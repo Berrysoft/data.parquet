@@ -84,10 +84,11 @@ fn concat_buffers_bool<'local>(
     env: &JNIEnv<'local>,
     len: usize,
 ) -> JObject<'local> {
-    let mut buf = vec![];
-    for buffer in buffers {
-        buf.extend_from_slice(buffer.as_slice());
-    }
+    let buf = buffers
+        .into_iter()
+        .flat_map(|buffer| buffer.as_slice())
+        .copied()
+        .collect::<Vec<_>>();
     let vec = BitIterator::new(&buf, 0, len)
         .map(|bit| bit as u8)
         .collect::<Vec<_>>();
@@ -101,10 +102,11 @@ fn concat_buffers<'local, T: TypeArray + ArrowNativeType>(
 where
     Vec<T>: ToJPrimitiveArray<T>,
 {
-    let mut vec: Vec<T> = vec![];
-    for buffer in buffers {
-        vec.extend_from_slice(buffer.typed_data());
-    }
+    let vec = buffers
+        .into_iter()
+        .flat_map(|buffer| buffer.typed_data::<T>())
+        .copied()
+        .collect::<Vec<_>>();
     vec.to_primitive_array(env).into()
 }
 
