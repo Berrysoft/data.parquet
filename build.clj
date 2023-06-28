@@ -1,7 +1,7 @@
 (ns build
   (:require [clojure.tools.build.api :as b]))
 
-(def lib 'berrysoft/data.parquet)
+(def lib 'com.berrysoft/berrysoft.data.parquet)
 (def version (format "0.1.0-%s" (b/git-count-revs nil)))
 (def class-dir "target/classes")
 (def basis (b/create-basis {:project "deps.edn"}))
@@ -15,20 +15,31 @@
 (def cargo-command
   ["cargo" "build"])
 
-(defn- jar-opt [rel]
-  (b/copy-dir {:src-dirs ["src"]
-               :target-dir class-dir})
-  (generate nil)
+(defn cargo-compile [rel]
   (b/process {:command-args
               (if rel
                 (conj cargo-command "--release")
-                cargo-command)})
-  (b/compile-clj {:basis basis
-                  :src-dirs ["src"]
-                  :class-dir class-dir}))
+                cargo-command)}))
 
-(defn jar-debug [_]
-  (jar-opt false))
+(defn- compile-opt [rel]
+  (generate nil)
+  (cargo-compile rel))
 
-(defn jar-release [_]
-  (jar-opt true))
+(defn compile-debug [_]
+  (compile-opt false))
+
+(defn compile-release [_]
+  (compile-opt true))
+
+(defn jar [_]
+  (generate nil)
+  (b/write-pom {:class-dir class-dir
+                :lib lib
+                :version version
+                :scm {:tag (str "v" version)}
+                :basis basis
+                :src-dirs ["src"]})
+  (b/copy-dir {:src-dirs ["src"]
+               :target-dir class-dir})
+  (b/jar {:class-dir class-dir
+          :jar-file jar-file}))

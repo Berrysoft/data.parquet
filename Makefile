@@ -4,7 +4,7 @@ generate:
 	clj -T:build generate
 
 compile:
-	clj -T:build jar-debug
+	clj -T:build compile-debug
 
 test: compile
 	LD_LIBRARY_PATH=target/debug clj -X:test
@@ -12,9 +12,13 @@ test: compile
 .PHONY: compile-release test-release
 
 compile-release:
-	clj -T:build jar-release
+	clj -T:build compile-release
 
 test-release: compile-release
 	LD_LIBRARY_PATH=target/release clj -X:test
+
+.PHONY: jar
+jar:
+	clj -T:build jar
 
 .SECONDARY:
