@@ -34,3 +34,20 @@
         (is (= [1 2 3] (seq (:a f))))
         (is (= [true true false] (seq (:b f))))
         (is (= [0.1 0.2 0.3] (seq (:c f))))))))
+
+(def mbatch-path "test.mbatch.pq")
+
+(deftest mbatch-io
+  (testing "Test batched save and open."
+    (with-open [_tf (utils/temp-file mbatch-path)]
+      (pq/save-parquet
+       mbatch-path
+       [{:a 1 :b true :c [0.1]}
+        {:a [2 3]
+         :b [true false]
+         :c [0.2 0.3]}])
+      (with-open [f (pq/open-parquet mbatch-path)]
+        (is (= [:a :b :c] (keys f)))
+        (is (= [1 2 3] (seq (:a f))))
+        (is (= [true true false] (seq (:b f))))
+        (is (= [0.1 0.2 0.3] (seq (:c f))))))))

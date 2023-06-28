@@ -8,7 +8,7 @@ use arrow_buffer::{bit_iterator::BitIterator, ArrowNativeType};
 use arrow_data::Buffers;
 use arrow_schema::{DataType, Field, Schema};
 use jni::{
-    objects::{JClass, JList, JMap, JObject, JPrimitiveArray, JString, TypeArray},
+    objects::{JClass, JList, JMap, JObject, JPrimitiveArray, JString, JValue, TypeArray},
     sys::{jlong, jobject},
     JNIEnv,
 };
@@ -206,7 +206,7 @@ pub unsafe extern "system" fn Java_data_ParquetNative_columnNext<'local>(
 
 unsafe fn get_class_name<'local>(env: &mut JNIEnv<'local>, class: &JClass<'local>) -> String {
     let ty_name = JString::from_raw(
-        env.call_method(&class, "getName", "()Ljava/lang/String;", &[])
+        env.call_method(class, "getName", "()Ljava/lang/String;", &[])
             .unwrap()
             .l()
             .unwrap()
@@ -295,36 +295,43 @@ impl_from_jobject!(i64, "longValue", "()J", j);
 impl_from_jobject!(f32, "floatValue", "()F", f);
 impl_from_jobject!(f64, "doubleValue", "()D", d);
 
+fn is_instance<'local>(env: &mut JNIEnv<'local>, obj: &JObject<'local>, ty: &str) -> bool {
+    let ty = env.find_class(ty).unwrap();
+    env.call_method(
+        &ty,
+        "isInstance",
+        "(Ljava/lang/Object;)Z",
+        &[JValue::Object(obj)],
+    )
+    .unwrap()
+    .z()
+    .unwrap()
+}
+
 fn from_jobject<'local, T: FromJObject>(env: &mut JNIEnv<'local>, obj: &JObject<'local>) -> Vec<T> {
-    let class = env.get_object_class(obj).unwrap();
-    let ty_name = unsafe { get_class_name(env, &class) };
-    match ty_name.as_str() {
-        "clojure.lang.PersistentVector" => {
-            let iterator = env
-                .call_method(obj, "iterator", "()Ljava/util/Iterator;", &[])
+    if is_instance(env, obj, "clojure/lang/Seqable") {
+        let mut seq = env
+            .call_method(obj, "seq", "()Lclojure/lang/ISeq;", &[])
+            .unwrap()
+            .l()
+            .unwrap();
+        let mut res = vec![];
+        while !seq.is_null() {
+            let obj = env
+                .call_method(&seq, "first", "()Ljava/lang/Object;", &[])
                 .unwrap()
                 .l()
                 .unwrap();
-            let mut res = vec![];
-            loop {
-                let has_next = env
-                    .call_method(&iterator, "hasNext", "()Z", &[])
-                    .unwrap()
-                    .z()
-                    .unwrap();
-                if !has_next {
-                    break;
-                }
-                let next = env
-                    .call_method(&iterator, "next", "()Ljava/lang/Object;", &[])
-                    .unwrap()
-                    .l()
-                    .unwrap();
-                res.push(T::from_jobject(env, &next));
-            }
-            res
+            res.push(T::from_jobject(env, &obj));
+            seq = env
+                .call_method(&seq, "next", "()Lclojure/lang/ISeq;", &[])
+                .unwrap()
+                .l()
+                .unwrap();
         }
-        _ => vec![T::from_jobject(env, obj)],
+        res
+    } else {
+        vec![T::from_jobject(env, obj)]
     }
 }
 
