@@ -19,6 +19,22 @@
         (is (= [true true false] (seq (:b f))))
         (is (= [0.1 0.2 0.3] (seq (:c f))))))))
 
+(def skey-path "test.skey.pq")
+
+(deftest skey-io
+  (testing "Test save and open."
+    (with-open [_tf (utils/temp-file skey-path)]
+      (pq/save-parquet
+       skey-path
+       {"a" [1 2 3]
+        "b" [true true false]
+        "c" [0.1 0.2 0.3]})
+      (with-open [f (pq/open-parquet skey-path)]
+        (is (= [:a :b :c] (keys f)))
+        (is (= [1 2 3] (seq (:a f))))
+        (is (= [true true false] (seq (:b f))))
+        (is (= [0.1 0.2 0.3] (seq (:c f))))))))
+
 (def batch-path "test.batch.pq")
 
 (deftest batch-io

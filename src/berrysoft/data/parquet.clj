@@ -72,27 +72,23 @@
   (close [_this]
     (ParquetNative/closeWriter writer)))
 
-(defn- java-map [m]
-  (let [jmap (java.util.HashMap.)]
-    (doseq [[key value] m]
-      (.put jmap (name key) value))
-    jmap))
+(defn- map-fn-to-map
+  [f m]
+  (into {} (for [[k v] m] [k (f v)])))
 
-(defn- java-class-map [m]
-  (let [jmap (java.util.HashMap.)]
-    (doseq [[key value] m]
-      (.put
-       jmap (name key)
-       (cond
-         (seq? value) (class (first value))
-         (vector? value) (class (first value))
-         :else (class value))))
-    jmap))
+(defn- class-map [m]
+  (map-fn-to-map
+   (fn [value]
+     (cond
+       (seq? value) (class (first value))
+       (vector? value) (class (first value))
+       :else (class value)))
+   m))
 
 (defn save-parquet [path data]
   (let [seq-data (if (map? data) [data] data)
         f (first seq-data)]
     (assert (map? f))
-    (with-open [writer (ParquetWriter. (ParquetNative/openWriter path (java-class-map f)))]
+    (with-open [writer (ParquetWriter. (ParquetNative/openWriter path (class-map f)))]
       (doseq [row seq-data]
-        (.add writer (java-map row))))))
+        (.add writer row)))))

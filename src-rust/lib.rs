@@ -9,7 +9,9 @@ use arrow_data::Buffers;
 use arrow_schema::{ArrowError, DataType, Field, Schema};
 use jni::{
     errors::{Exception, ToException},
-    objects::{JClass, JList, JMap, JObject, JPrimitiveArray, JString, JValue, TypeArray},
+    objects::{
+        AutoLocal, JClass, JList, JMap, JObject, JPrimitiveArray, JString, JValue, TypeArray,
+    },
     sys::{jlong, jobject},
     JNIEnv,
 };
@@ -60,6 +62,22 @@ impl ToException for ParquetNativeError {
 }
 
 pub type ParquetNativeResult<T> = Result<T, ParquetNativeError>;
+
+fn is_instance<'local>(
+    env: &mut JNIEnv<'local>,
+    obj: &JObject<'local>,
+    ty: &str,
+) -> ParquetNativeResult<bool> {
+    let ty = env.find_class(ty)?;
+    Ok(env
+        .call_method(
+            &ty,
+            "isInstance",
+            "(Ljava/lang/Object;)Z",
+            &[JValue::Object(obj)],
+        )?
+        .z()?)
+}
 
 struct NativeReader {
     file: File,
@@ -308,6 +326,29 @@ fn get_class_name<'local>(
     Ok(ty_name)
 }
 
+fn get_key_name<'local>(
+    env: &mut JNIEnv<'local>,
+    key: AutoLocal<'local, JObject<'local>>,
+) -> ParquetNativeResult<String> {
+    if is_instance(env, &key, "clojure/lang/Keyword")? {
+        let name = env
+            .call_method(key, "getName", "()Ljava/lang/String;", &[])?
+            .l()?;
+        let name = unsafe { JString::from_raw(name.into_raw()) };
+        let name = env.get_string(&name)?;
+        Ok(name.into())
+    } else if is_instance(env, &key, "java/lang/String")? {
+        let name = env.auto_local(unsafe { JString::from_raw(key.forget().into_raw()) });
+        let name = env.get_string(&name)?;
+        Ok(name.into())
+    } else {
+        let class = env.get_object_class(key)?;
+        Err(ParquetNativeError::UnsupportedType(get_class_name(
+            env, &class,
+        )?))
+    }
+}
+
 struct NativeWriter {
     schema: Arc<Schema>,
     writer: ArrowWriter<File>,
@@ -324,10 +365,10 @@ fn open_writer<'local>(
 
     let mut schema_iter = schema.iter(env)?;
     while let Some((key, ty)) = schema_iter.next(env)? {
-        let key = env.auto_local(unsafe { JString::from_raw(key.into_raw()) });
+        let key = env.auto_local(key);
         let ty = env.auto_local(unsafe { JClass::from_raw(ty.into_raw()) });
 
-        let key: String = env.get_string(&key)?.into();
+        let key = get_key_name(env, key)?;
         let ty_name = get_class_name(env, &ty)?;
 
         let ty = match ty_name.as_str() {
@@ -412,22 +453,6 @@ impl_from_jobject!(i64, Int64Array, "longValue", "()J", j);
 impl_from_jobject!(f32, Float32Array, "floatValue", "()F", f);
 impl_from_jobject!(f64, Float64Array, "doubleValue", "()D", d);
 
-fn is_instance<'local>(
-    env: &mut JNIEnv<'local>,
-    obj: &JObject<'local>,
-    ty: &str,
-) -> ParquetNativeResult<bool> {
-    let ty = env.find_class(ty)?;
-    Ok(env
-        .call_method(
-            &ty,
-            "isInstance",
-            "(Ljava/lang/Object;)Z",
-            &[JValue::Object(obj)],
-        )?
-        .z()?)
-}
-
 fn from_jobject<'local, T: FromJObject>(
     env: &mut JNIEnv<'local>,
     obj: &JObject<'local>,
@@ -474,10 +499,10 @@ fn write_row<'local>(
     let values = JMap::from_env(env, &values)?;
     let mut values_iter = values.iter(env)?;
     while let Some((key, value)) = values_iter.next(env)? {
-        let key = env.auto_local(unsafe { JString::from_raw(key.into_raw()) });
+        let key = env.auto_local(key);
         let value = env.auto_local(value);
 
-        let key: String = env.get_string(&key)?.into();
+        let key = get_key_name(env, key)?;
         let (index, field) = schema
             .fields()
             .find(&key)
