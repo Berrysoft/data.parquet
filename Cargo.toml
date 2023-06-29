@@ -15,3 +15,7 @@ arrow-data = "42"
 arrow-schema = "42"
 parquet = "42"
 thiserror = "1"
+
+[profile.release]
+lto = true
+codegen-units = 1
