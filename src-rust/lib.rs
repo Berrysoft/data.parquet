@@ -448,7 +448,7 @@ macro_rules! impl_from_jobject {
 impl_from_jobject!(bool, BooleanArray, "booleanValue", "()Z", z);
 impl_from_jobject!(i8, Int8Array, "byteValue", "()B", b);
 impl_from_jobject!(i16, Int16Array, "shortValue", "()S", s);
-impl_from_jobject!(i32, Int32Array, "integerValue", "()I", i);
+impl_from_jobject!(i32, Int32Array, "intValue", "()I", i);
 impl_from_jobject!(i64, Int64Array, "longValue", "()J", j);
 impl_from_jobject!(f32, Float32Array, "floatValue", "()F", f);
 impl_from_jobject!(f64, Float64Array, "doubleValue", "()D", d);

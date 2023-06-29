@@ -6,7 +6,7 @@
 (def basic-path "test.pq")
 
 (deftest basic-io
-  (testing "Test save and open."
+  (testing "Test IO."
     (with-open [_tf (utils/temp-file basic-path)]
       (pq/save-parquet
        basic-path
@@ -22,7 +22,7 @@
 (def skey-path "test.skey.pq")
 
 (deftest skey-io
-  (testing "Test save and open."
+  (testing "Test string key IO."
     (with-open [_tf (utils/temp-file skey-path)]
       (pq/save-parquet
        skey-path
@@ -38,7 +38,7 @@
 (def batch-path "test.batch.pq")
 
 (deftest batch-io
-  (testing "Test batched save and open."
+  (testing "Test batched IO."
     (with-open [_tf (utils/temp-file batch-path)]
       (pq/save-parquet
        batch-path
@@ -54,7 +54,7 @@
 (def mbatch-path "test.mbatch.pq")
 
 (deftest mbatch-io
-  (testing "Test batched save and open."
+  (testing "Test mixed batched IO."
     (with-open [_tf (utils/temp-file mbatch-path)]
       (pq/save-parquet
        mbatch-path
