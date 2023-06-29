@@ -379,7 +379,7 @@ fn open_writer<'local>(
             "java.lang.Long" => DataType::Int64,
             "java.lang.Float" => DataType::Float32,
             "java.lang.Double" => DataType::Float64,
-            _ => DataType::Null,
+            _ => return Err(ParquetNativeError::UnsupportedType(ty_name)),
         };
         fields.push(Field::new(key, ty, false));
     }
@@ -516,7 +516,7 @@ fn write_row<'local>(
             DataType::Int64 => columns[index] = from_jobject::<i64>(env, &value)?,
             DataType::Float32 => columns[index] = from_jobject::<f32>(env, &value)?,
             DataType::Float64 => columns[index] = from_jobject::<f64>(env, &value)?,
-            _ => {}
+            _ => unreachable!(),
         }
     }
 
