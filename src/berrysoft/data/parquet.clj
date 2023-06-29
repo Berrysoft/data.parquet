@@ -1,8 +1,12 @@
 (ns berrysoft.data.parquet
-  (:gen-class))
+  (:gen-class)
+  (:require [clojure.java.io :as io]))
 
 (import berrysoft.data.ParquetNative)
 (import berrysoft.data.ParquetColumnSeq)
+
+(defn- as-path [f]
+  (.getPath (io/as-file f)))
 
 #_{:clj-kondo/ignore [:clojure-lsp/unused-public-var]}
 (defprotocol IParquetFile
@@ -57,7 +61,7 @@
     (str (.getColumns this))))
 
 (defn open-parquet [path]
-  (ParquetFile. (ParquetNative/openReader path) []))
+  (ParquetFile. (ParquetNative/openReader (as-path path)) []))
 
 #_{:clj-kondo/ignore [:clojure-lsp/unused-public-var]}
 (defprotocol IParquetWriter
@@ -89,6 +93,6 @@
   (let [seq-data (if (map? data) [data] data)
         f (first seq-data)]
     (assert (map? f))
-    (with-open [writer (ParquetWriter. (ParquetNative/openWriter path (class-map f)))]
+    (with-open [writer (ParquetWriter. (ParquetNative/openWriter (as-path path) (class-map f)))]
       (doseq [row seq-data]
         (.add writer row)))))
