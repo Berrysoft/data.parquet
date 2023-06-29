@@ -1,5 +1,6 @@
 (ns build
-  (:require [clojure.tools.build.api :as b]))
+  (:require [clojure.tools.build.api :as b]
+            [clojure.java.io :as io]))
 
 (def lib 'com.berrysoft/berrysoft.data.parquet)
 (def version (format "0.1.0-%s" (b/git-count-revs nil)))
@@ -16,7 +17,15 @@
 (def cargo-command
   ["cargo" "build"])
 
+(defn- native-folder [rel]
+  (str
+   (.getCanonicalPath (io/as-file b/*project-root*))
+   "/target/"
+   (if rel "release" "debug")))
+
 (defn cargo-compile [rel]
+  (println "Compile native lib to" (native-folder rel))
+  (println "Set this path to LD_LIBRARY_PATH or java.library.path to allow java find the native library.")
   (b/process {:command-args
               (if rel
                 (conj cargo-command "--release")
@@ -26,11 +35,9 @@
   (generate nil)
   (cargo-compile rel))
 
-(defn compile-debug [_]
-  (compile-opt false))
-
-(defn compile-release [_]
-  (compile-opt true))
+(defn compile [path]
+  (let [rel (if (contains? path :release) (path :release) false)]
+    (compile-opt rel)))
 
 (defn jar [_]
   (generate nil)
@@ -44,3 +51,11 @@
                :target-dir class-dir})
   (b/jar {:class-dir class-dir
           :jar-file jar-file}))
+
+(defn install [_]
+  (jar nil)
+  (b/install {:basis basis
+              :lib lib
+              :version version
+              :jar-file jar-file
+              :class-dir class-dir}))
