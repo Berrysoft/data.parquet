@@ -2,7 +2,7 @@
   (:require [clojure.tools.build.api :as b]
             [clojure.java.io :as io]))
 
-(def lib 'com.berrysoft/berrysoft.data.parquet)
+(def lib 'io.github.berrysoft/berrysoft.data.parquet)
 (def version (format "0.1.0-%s" (b/git-count-revs nil)))
 (def class-dir "target/classes")
 (def basis (b/create-basis {:project "deps.edn"}))
