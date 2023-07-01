@@ -12,7 +12,7 @@ test: compile
 .PHONY: compile-release test-release
 
 compile-release:
-	clj -T:build compile :release true
+	clj -T:build compile-release
 
 test-release: compile-release
 	LD_LIBRARY_PATH=target/release clj -X:test

@@ -14,4 +14,4 @@
  :deps/prep-lib
  {:alias :build
   :fn compile-release
-  :ensure "target/classes"}}
+  :ensure "target/release"}}

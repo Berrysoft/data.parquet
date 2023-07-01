@@ -24,20 +24,22 @@
    (if rel "release" "debug")))
 
 (defn cargo-compile [rel]
-  (println "Compile native lib to" (native-folder rel))
-  (println "Set this path to LD_LIBRARY_PATH or java.library.path to allow java find the native library.")
   (b/process {:command-args
               (if rel
                 (conj cargo-command "--release")
-                cargo-command)}))
+                cargo-command)})
+  (println "Compiled native lib to" (native-folder rel))
+  (println "Set this path to LD_LIBRARY_PATH or java.library.path to allow java find the native library."))
 
 (defn- compile-opt [rel]
   (generate nil)
   (cargo-compile rel))
 
-(defn compile [path]
-  (let [rel (if (contains? path :release) (path :release) false)]
-    (compile-opt rel)))
+(defn compile [_]
+  (compile-opt false))
+
+(defn compile-release [_]
+  (compile-opt true))
 
 (defn jar [_]
   (generate nil)
