@@ -9,7 +9,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 jni = "0.21"
-arrow-array = "43"
+arrow-array = "44"
 arrow-buffer = "43"
 arrow-data = "43"
 arrow-schema = "43"
