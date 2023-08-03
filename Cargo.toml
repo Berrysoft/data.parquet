@@ -13,7 +13,7 @@ arrow-array = "44"
 arrow-buffer = "44"
 arrow-data = "44"
 arrow-schema = "44"
-parquet = "44"
+parquet = "45"
 thiserror = "1"
 
 [profile.release]
