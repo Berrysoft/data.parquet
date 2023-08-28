@@ -12,7 +12,7 @@ jni = "0.21"
 arrow-array = "45"
 arrow-buffer = "45"
 arrow-data = "45"
-arrow-schema = "45"
+arrow-schema = "46"
 parquet = "45"
 thiserror = "1"
 
