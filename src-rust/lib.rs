@@ -4,8 +4,7 @@ use arrow_array::{
     new_empty_array, Array, BooleanArray, Float32Array, Float64Array, Int16Array, Int32Array,
     Int64Array, Int8Array, RecordBatch, RecordBatchReader,
 };
-use arrow_buffer::{bit_iterator::BitIterator, ArrowNativeType};
-use arrow_data::Buffers;
+use arrow_buffer::{bit_iterator::BitIterator, ArrowNativeType, Buffer};
 use arrow_schema::{ArrowError, DataType, Field, Schema};
 use jni::{
     errors::{Exception, ToException},
@@ -161,12 +160,12 @@ pub unsafe extern "system" fn Java_berrysoft_data_ParquetNative_getColumns<'loca
 }
 
 fn concat_buffers_bool<'local>(
-    buffers: Buffers,
+    buffers: &[Buffer],
     env: &JNIEnv<'local>,
     len: usize,
 ) -> ParquetNativeResult<JObject<'local>> {
     let buf = buffers
-        .into_iter()
+        .iter()
         .flat_map(|buffer| buffer.as_slice())
         .copied()
         .collect::<Vec<_>>();
@@ -177,14 +176,14 @@ fn concat_buffers_bool<'local>(
 }
 
 fn concat_buffers<'local, T: TypeArray + ArrowNativeType>(
-    buffers: Buffers,
+    buffers: &[Buffer],
     env: &JNIEnv<'local>,
 ) -> ParquetNativeResult<JObject<'local>>
 where
     Vec<T>: ToJPrimitiveArray<T>,
 {
     let vec = buffers
-        .into_iter()
+        .iter()
         .flat_map(|buffer| buffer.typed_data::<T>())
         .copied()
         .collect::<Vec<_>>();
@@ -293,10 +292,7 @@ pub unsafe extern "system" fn Java_berrysoft_data_ParquetNative_closeColumn<'loc
     }
 }
 
-fn column_next<'local>(
-    env: &mut JNIEnv<'local>,
-    col: jlong,
-) -> ParquetNativeResult<JObject<'local>> {
+fn column_next<'local>(env: &JNIEnv<'local>, col: jlong) -> ParquetNativeResult<JObject<'local>> {
     let col = col as *mut NativeColumn;
     let col = unsafe { col.as_mut() }.ok_or(ParquetNativeError::Null)?;
     col.next(env).unwrap_or_else(|| Ok(JObject::null()))
@@ -308,7 +304,7 @@ pub unsafe extern "system" fn Java_berrysoft_data_ParquetNative_columnNext<'loca
     _class: JClass<'local>,
     col: jlong,
 ) -> jobject {
-    column_next(&mut env, col)
+    column_next(&env, col)
         .map_err(|e| env.throw(e.to_exception()))
         .unwrap_or_default()
         .into_raw()
