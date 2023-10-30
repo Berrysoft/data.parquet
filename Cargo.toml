@@ -12,7 +12,7 @@ jni = "0.21"
 arrow-array = "47"
 arrow-buffer = "47"
 arrow-schema = "47"
-parquet = "47"
+parquet = "48"
 thiserror = "1"
 
 [profile.release]
